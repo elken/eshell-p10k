@@ -1,0 +1,85 @@
+#+TITLE: eshell-p10k
+#+STARTUP: inlineimages nofold
+
+[[file:.github/preview.png]]
+
+=eshell-p10k= is, as the name implies, an eshell version of [[https://github.com/romkatv/powerlevel10k][p10k]] (a popular shell theme).
+
+* Install
+** Dependencies
++ =magit= for git status
+
+  Everything else should already come with emacs
+
+** MELPA
+Coming Soon™
+
+** Manual
+Add in the load-path somewhere after the dependencies
+
+* Configure
+
+Some point after =eshell= has loaded (ideally), use the following options to load the prompt
+
+#+begin_src emacs-lisp
+(setq eshell-prompt-function #'eshell-p10k-prompt-function
+        eshell-prompt-regexp eshell-p10k-prompt-string)
+#+end_src
+
+** Characters
+Much like p10k itself, it's possible to change all the start/end/separator characters.
+
+| Variable                     | Default  |
+|------------------------------+----------|
+| =eshell-p10k-separator=        | "\xe0bc" |
+| =eshell-p10k-start-terminator= | "\xe0b2" |
+| =eshell-p10k-end-terminator=   | "\xe0b0" |
+
+Any characters /should/ work but haven't been tested
+
+** Segments
+This package includes a somewhat sane prompt out of the box, but also includes a
+number of tools to create our own segments.
+
+Let's take a go at our own segment(using an existing face for simplicity)
+
+#+begin_src emacs-lisp
+(eshell-p10k-def-segment time
+  ""
+  (format-time-string "%H:%M" (current-time))
+  'eshell-distro-face)
+#+end_src
+
+The =eshell-p10k-def-segment= macro takes the following basic form:
+
+#+begin_src emacs-lisp
+(eshell-p10k-def-segment segment-name
+  icon-to-use
+  body
+  face)
+#+end_src
+
++ =segment-name= is the defined name of the segment, which will be later used when
+  we define the prompt function
++ =icon-to-use= is the icon which will get prepended to the start of the form. Can
+  also be an expression.
++ =body= is the ... body of the segment, which gets evaluated to produce the
+  output. A result of =nil= will cause the segment to not be displayed.
++ =face= is the face used to display the segment. Can also be an expression.
+
+Now the segment has been created, the prompt definer (=eshell-p10k-prompt-function=) has to be modified
+
+#+begin_src emacs-lisp
+(defun eshell-p10k-prompt-function ()
+  "Prompt defining function."
+  (eshell-p10k-def-prompt '(distro dir git prompt-num time)))
+#+end_src
+
+And after everything has been re-evaluated, we have the below prompt!
+
+[[file:.github/time.png]]
+
+* Credit
++ [[https://www.modernemacs.com/post/custom-eshell/][This]] article gave me the fundamentals to create the skeleton for this
++ [[https://github.com/seagle0128/doom-modeline][doom-modeline]] for the concept of split segments and adding checks around said segments
++ [[https://github.com/romkatv/powerlevel10k][p10k]] for the inspiration and (and the icons)
