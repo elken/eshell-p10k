@@ -18,7 +18,6 @@
 ;; Also includes tools to build custom segments
 ;;
 ;;; Code:
-(require 'tramp)
 (require 'em-dirs)
 (require 'cl-lib)
 (require 'dash)
@@ -246,12 +245,12 @@ Needs SECTION for current foreground"
   (abbreviate-file-name (eshell/pwd))
   'eshell-directory-face)
 
-(defun eshell-p10k-git-repo-p ()
+(defun eshell-p10k-git--repo-p ()
   "Return t if the git executable is on the system and we're in a git repo."
   (and (executable-find "git")
        (vc-find-root (eshell/pwd) ".git")))
 
-(defun eshell-p10k-git-command (command &optional directory)
+(defun eshell-p10k-git--command (command &optional directory)
   "Run a git COMMAND in the current directory, or DIRECTORY."
   (let ((default-directory (or directory default-directory))
         (process-environment process-environment))
@@ -269,13 +268,13 @@ Needs SECTION for current foreground"
 
 (defun eshell-p10k-git-current-branch ()
   "Return the current git branch."
-  (when (eshell-p10k-git-repo-p)
-    (eshell-p10k-git-command "symbolic-ref --short HEAD")))
+  (when (eshell-p10k-git--repo-p)
+    (eshell-p10k-git--command "symbolic-ref --short HEAD")))
 
-(defun git-clean-p ()
+(defun eshell-p10k-git--clean-p ()
   "Predicate to check if the current directory is clean."
   (when (eshell-p10k-git-current-branch)
-    (string= "" (eshell-p10k-git-command "status -s"))))
+    (string= "" (eshell-p10k-git--command "status -s"))))
 
 (defun alist-set-or-increment (lst key &optional symbol)
   "Either set KEY to VAL in LST, or increment if exists."
@@ -288,26 +287,28 @@ Needs SECTION for current foreground"
 
 (defun eshell-p10k-git--status ()
   "Return an alist based on the current git status."
-  (when-let* ((status-lines (s-split "\n" (eshell-p10k-git-command "status --porcelain"))))
-    (mapconcat 'identity (mapcar
-                          (lambda (item) (format "%s%s" (car item) (cdr item)))
-                          (-reduce-from
-                           (lambda (acc x)
-                             (alist-set-or-increment acc (substring x 0 2)))
-                           '()
-                           status-lines)) " ")))
+  (when (eshell-p10k-git--repo-p)
+    (when-let* ((status-lines (s-split "\n" (eshell-p10k-git--command "status --porcelain"))))
+      (mapconcat 'identity (mapcar
+                            (lambda (item) (format "%s%s" (car item) (cdr item)))
+                            (-reduce-from
+                             (lambda (acc x)
+                               (alist-set-or-increment acc (substring x 0 2)))
+                             '()
+                             status-lines)) " "))))
 
 (defun eshell-p10k-git-status ()
   "Return the current git status."
-  (concat
-   (eshell-p10k-git-current-branch)
-   " "
-   (eshell-p10k-git--status)))
+  (when (eshell-p10k-git--repo-p)
+    (concat
+     (eshell-p10k-git-current-branch)
+     " "
+     (eshell-p10k-git--status))))
 
 (eshell-p10k-def-segment git
   ""
   (eshell-p10k-git-status)
-  (if (git-clean-p)
+  (if (eshell-p10k-git--clean-p)
       'eshell-git-clean-face
     'eshell-git-dirty-face))
 
