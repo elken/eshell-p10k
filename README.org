@@ -7,8 +7,6 @@
 
 * Install
 ** Dependencies
-+ =magit= for git status
-
   Everything else should already come with emacs
 
 ** MELPA
