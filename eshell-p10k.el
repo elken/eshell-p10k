@@ -288,14 +288,16 @@ Needs SECTION for current foreground"
 (defun eshell-p10k-git--status ()
   "Return an alist based on the current git status."
   (when (eshell-p10k-git--repo-p)
-    (when-let* ((status-lines (s-split "\n" (eshell-p10k-git--command "status --porcelain"))))
-      (mapconcat 'identity (mapcar
-                            (lambda (item) (format "%s%s" (car item) (cdr item)))
-                            (-reduce-from
-                             (lambda (acc x)
-                               (alist-set-or-increment acc (substring x 0 2)))
-                             '()
-                             status-lines)) " "))))
+    (let ((status (eshell-p10k-git--command "status --porcelain")))
+        (when (not (string= "" status))
+          (when-let* ((status-lines (s-split "\n" status)))
+            (mapconcat 'identity (mapcar
+                                  (lambda (item) (format "%s%s" (car item) (cdr item)))
+                                  (-reduce-from
+                                   (lambda (acc x)
+                                     (alist-set-or-increment acc (substring x 0 2)))
+                                   '()
+                                   status-lines)) " "))))))
 
 (defun eshell-p10k-git-status ()
   "Return the current git status."
