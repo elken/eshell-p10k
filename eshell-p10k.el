@@ -1,4 +1,4 @@
-;;; eshell-p10k.el --- p10k-style prompt for eshell -*- lexical-binding: t; -*-
+;;; eshell-p10k.el --- Custom prompt framework for eshell -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021 Ellis Kenyő
 ;;
@@ -6,9 +6,9 @@
 ;; Maintainer: Ellis Kenyő <me@elken.dev>
 ;; Created: February 19, 2021
 ;; Modified: February 19, 2021
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; Homepage: https://github.com/elken/eshell-p10k
-;; Package-Requires: ((emacs "24.3"))
+;; Package-Requires: ((emacs "26.1") (all-the-icons "5.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -22,69 +22,70 @@
 (require 'cl-lib)
 (require 'dash)
 (require 's)
+(require 'all-the-icons)
 (autoload 'vc-find-root "vc-hooks")
 (autoload 'vc-git-branches "vc-git")
 
 ;; Groups
 
 (defgroup eshell-p10k nil
-  "Settings related to eshell-p10k"
+  "Settings related to eshell-p10k."
   :group 'eshell-p10k)
 
 (defgroup eshell-p10k-faces nil
-  "Faces related to eshell-p10k"
+  "Faces related to eshell-p10k."
   :group 'eshell-p10k-faces)
 
 ;; Faces
 
-(defface eshell-exit-success-face
+(defface eshell-p10k-exit-success-face
   '((t (:inherit success)))
-  "Face to indicate the previous command exited successfully"
+  "Face to indicate the previous command exited successfully."
   :group 'eshell-p10k-faces)
 
-(defface eshell-exit-failure-face
+(defface eshell-p10k-exit-failure-face
   '((t (:inherit fail)))
-  "Face to indicate the previous command exited unsuccessfully"
+  "Face to indicate the previous command exited unsuccessfully."
   :group 'eshell-p10k-faces)
 
-(defface eshell-directory-face
+(defface eshell-p10k-directory-face
   '((t (:background "steel blue")))
-  "Face for the current working directory"
+  "Face for the current working directory."
   :group 'eshell-p10k-faces)
 
-(defface eshell-prompt-face
+(defface eshell-p10k-prompt-face
   '((t (:background "brown")))
-  "Face for the prompt number"
+  "Face for the prompt number."
   :group 'eshell-p10k-faces)
 
-(defface eshell-distro-face
+(defface eshell-p10k-distro-face
   '((t (:background "white" :foreground "black")))
-  "Face for the distro icon"
+  "Face for the distro icon."
   :group 'eshell-p10k-faces)
 
-(defface eshell-git-modified-face
+(defface eshell-p10k-git-modified-face
   '((t (:foreground "red")))
-  "Face for the 'modified' item in git"
+  "Face for the 'modified' item in git."
   :group 'eshell-p10k-faces)
 
-(defface eshell-git-add-face
+(defface eshell-p10k-git-add-face
   '((t (:foreground "white")))
-  "Face for the 'added' item in git"
+  "Face for the 'added' item in git."
   :group 'eshell-p10k-faces)
 
-(defface eshell-git-branch-face
+(defface eshell-p10k-git-branch-face
   '((t (:foreground "dark gray")))
-  "Face for the current git branch"
+  "Face for the current git branch."
   :group 'eshell-p10k-faces)
 
-(defface eshell-git-clean-face
+(defface eshell-p10k-git-clean-face
   '((t :background "forest green"))
-  "Face for a clean git tree"
+  "Face for a clean git tree."
   :group 'eshell-p10k-faces)
 
-(defface eshell-git-dirty-face
+(defface eshell-p10k-git-dirty-face
   '((t :background "indian red"))
-  "Face for a dirty git tree"
+  "Face for a dirty git tree."
   :group 'eshell-p10k-faces)
 
 ;; Custom variables
@@ -227,7 +228,7 @@ Needs SECTION for current foreground"
   "Return an icon based on the current operating system."
   (cond
    ((memq system-type '(cygwin windows-nt ms-dos)) (all-the-icons-faicon "windows"))
-   ((eq system-type 'darwin)                       (all-the-icons-fileicon "apple"))
+   ((eq system-type 'darwin)                       (propertize (all-the-icons-faicon "apple") 'face '(:height 1) 'display '(raise 0.0)))
    ((eq system-type 'berkely-unix)                 "\uF30c ")
    ((eq system-type 'gnu/linux)                    (eshell-p10k--get-linux-icon))))
 
@@ -238,12 +239,12 @@ Needs SECTION for current foreground"
 (eshell-p10k-def-segment distro
   nil
   (eshell-p10k--get-os-icon)
-  'eshell-distro-face)
+  'eshell-p10k-distro-face)
 
 (eshell-p10k-def-segment dir
   ""
   (abbreviate-file-name (eshell/pwd))
-  'eshell-directory-face)
+  'eshell-p10k-directory-face)
 
 (defun eshell-p10k-git--repo-p ()
   "Return t if the git executable is on the system and we're in a git repo."
@@ -276,7 +277,7 @@ Needs SECTION for current foreground"
   (when (eshell-p10k-git-current-branch)
     (string= "" (eshell-p10k-git--command "status -s"))))
 
-(defun alist-set-or-increment (lst key &optional symbol)
+(defun eshell-p10k--alist-set-or-increment (lst key &optional symbol)
   "Either set KEY to VAL in LST, or increment if exists."
   (if-let ((pair (if symbol
                      (assq key lst)
@@ -295,7 +296,7 @@ Needs SECTION for current foreground"
                                   (lambda (item) (format "%s%s" (car item) (cdr item)))
                                   (-reduce-from
                                    (lambda (acc x)
-                                     (alist-set-or-increment acc (substring x 0 2)))
+                                     (eshell-p10k--alist-set-or-increment acc (substring x 0 2)))
                                    '()
                                    status-lines)) " "))))))
 
@@ -311,8 +312,8 @@ Needs SECTION for current foreground"
   ""
   (eshell-p10k-git-status)
   (if (eshell-p10k-git--clean-p)
-      'eshell-git-clean-face
-    'eshell-git-dirty-face))
+      'eshell-p10k-git-clean-face
+    'eshell-p10k-git-dirty-face))
 
 (defvar eshell-p10k--prompt-num-index 0)
 (add-hook 'eshell-exit-hook (lambda () (setq eshell-p10k--prompt-num-index 0)))
@@ -328,7 +329,7 @@ Needs SECTION for current foreground"
 (eshell-p10k-def-segment prompt-num
   ""
   (number-to-string eshell-p10k--prompt-num-index)
-  'eshell-prompt-face)
+  'eshell-p10k-prompt-face)
 
 (provide 'eshell-p10k)
 ;;; eshell-p10k.el ends here
