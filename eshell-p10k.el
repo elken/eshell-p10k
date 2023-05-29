@@ -8,7 +8,7 @@
 ;; Modified: February 19, 2021
 ;; Version: 0.0.2
 ;; Homepage: https://github.com/elken/eshell-p10k
-;; Package-Requires: ((emacs "26.1") (all-the-icons "5.0"))
+;; Package-Requires: ((emacs "26.1") (all-the-icons "5.0") (dash "2.19.1") (s "1.13.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
