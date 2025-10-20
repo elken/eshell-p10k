@@ -8,87 +8,45 @@
 ;; Modified: February 19, 2021
 ;; Version: 0.0.2
 ;; Homepage: https://github.com/elken/eshell-p10k
-;; Package-Requires: ((emacs "26.1") (all-the-icons "5.0") (dash "2.19.1") (s "1.13.0"))
+;; Package-Requires: ((emacs "27.1") (nerd-icons "0.1.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; Commentary:
 ;;
-;; Fancy prompt based on p10k made purely in eshell.
-;; Also includes tools to build custom segments
+;; Fancy prompt framework based on p10k for eshell.
+;; Provides tools to build custom segments and compose prompts.
+;;
+;; Basic usage:
+;;
+;;   (require 'eshell-p10k-default-config)
+;;   (setq eshell-prompt-function #'eshell-p10k-default-prompt)
+;;
+;; Define custom segments:
+;;
+;;   (eshell-p10k-def-segment time
+;;     ""
+;;     (format-time-string "%H:%M:%S")
+;;     'my-time-face)
+;;
+;; Create custom prompts:
+;;
+;;   (defun my-prompt ()
+;;     (eshell-p10k-def-prompt '(distro dir git time)))
 ;;
 ;;; Code:
 (require 'em-dirs)
 (require 'cl-lib)
-(require 'dash)
-(require 's)
-(require 'all-the-icons)
-(autoload 'vc-find-root "vc-hooks")
-(autoload 'vc-git-branches "vc-git")
 
-;; Groups
+;;; Customization
 
 (defgroup eshell-p10k nil
   "Settings related to eshell-p10k."
-  :group 'eshell-p10k)
+  :group 'eshell)
 
 (defgroup eshell-p10k-faces nil
   "Faces related to eshell-p10k."
-  :group 'eshell-p10k-faces)
-
-;; Faces
-
-(defface eshell-p10k-exit-success-face
-  '((t (:inherit success)))
-  "Face to indicate the previous command exited successfully."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-exit-failure-face
-  '((t (:inherit fail)))
-  "Face to indicate the previous command exited unsuccessfully."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-directory-face
-  '((t (:background "steel blue")))
-  "Face for the current working directory."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-prompt-face
-  '((t (:background "brown")))
-  "Face for the prompt number."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-distro-face
-  '((t (:background "white" :foreground "black")))
-  "Face for the distro icon."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-git-modified-face
-  '((t (:foreground "red")))
-  "Face for the 'modified' item in git."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-git-add-face
-  '((t (:foreground "white")))
-  "Face for the 'added' item in git."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-git-branch-face
-  '((t (:foreground "dark gray")))
-  "Face for the current git branch."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-git-clean-face
-  '((t :background "forest green"))
-  "Face for a clean git tree."
-  :group 'eshell-p10k-faces)
-
-(defface eshell-p10k-git-dirty-face
-  '((t :background "indian red"))
-  "Face for a dirty git tree."
-  :group 'eshell-p10k-faces)
-
-;; Custom variables
+  :group 'eshell-p10k)
 
 (defcustom eshell-p10k-header-string "\n┌─"
   "String to append before the first segment."
@@ -101,7 +59,7 @@
   :group 'eshell-p10k)
 
 (defcustom eshell-p10k-prompt-regex "^.*─> "
-  "Regex to use to find the tip of the prompt (used for jumping between prompts)."
+  "Regex to find the prompt tip (used for jumping between prompts)."
   :type 'string
   :group 'eshell-p10k)
 
@@ -111,225 +69,88 @@
   :group 'eshell-p10k)
 
 (defcustom eshell-p10k-start-terminator "\xe0b2"
-  "String to insert at the start of the segments."
+  "String to insert at the start of segments."
   :type 'string
   :group 'eshell-p10k)
 
 (defcustom eshell-p10k-end-terminator "\xe0b0"
-  "String to insert at the end of the segments."
+  "String to insert at the end of segments."
   :type 'string
   :group 'eshell-p10k)
 
-;; Core
+;;; Core framework
 
-(defvar eshell-p10k-segment-alist ())
+(defvar eshell-p10k-segment-alist ()
+  "Alist mapping segment names to their rendering functions.")
 
-(defmacro eshell-p10k--internal-segment-name (segment)
-  "Convert SEGMENT to the internal name."
-  `(intern (format "eshell-p10k-segment--%s" ,segment)))
+(defun eshell-p10k--segment-name (segment)
+  "Convert SEGMENT symbol to internal name."
+  (intern (format "eshell-p10k-segment--%s" segment)))
 
-(defmacro eshell-p10k-def-segment (NAME ICON FORM FACE)
-  "Define a segment called NAME with ICON, evaluating FORM and styling with FACE."
+(defmacro eshell-p10k-def-segment (name icon form face)
+  "Define a prompt segment.
+NAME is the segment identifier symbol.
+ICON is a string to display before the content (or nil).
+FORM is evaluated to get the segment content.
+FACE is the face to style the segment."
   (declare (indent defun))
-  (let ((name (eshell-p10k--internal-segment-name NAME)))
-    `(add-to-list 'eshell-p10k-segment-alist (cons ',name
-                                                   (lambda () (when ,FORM
-                                                           (-> " "
-                                                               (concat (when ,ICON (concat ,ICON " ")) ,FORM " ")
-                                                               (propertize 'face ,FACE))))))))
+  `(setq eshell-p10k-segment-alist
+         (cons (cons ',(eshell-p10k--segment-name name)
+                     (lambda ()
+                       (when-let ((content ,form))
+                         (propertize
+                          (concat ,@(when icon `((concat ,icon " "))) content " ")
+                          'face ,face))))
+               (assq-delete-all ',(eshell-p10k--segment-name name)
+                               eshell-p10k-segment-alist))))
 
-(defun eshell-p10k--get-section-separator (acc section)
-  "Return an appropriately-coloured CHAR separator.
-Needs SECTION for current background and ACC for existing
-foreground"
-  (let ((foreground (get-text-property (- (length acc) 2) 'face acc))
-        (background (get-text-property 0 'face section)))
-    (propertize (format "%s " eshell-p10k-separator) 'face `(:foreground ,(face-background foreground) :background ,(face-background background)))))
+(defun eshell-p10k--get-bg (face)
+  "Get background color from FACE."
+  (face-background face))
 
-(defun eshell-p10k--get-prompt-start-terminator (section)
-  "Return an appropraitely-coloured CHAR terminator.
-Needs SECTION for current foreground"
-  (propertize eshell-p10k-start-terminator 'face `(:foreground ,(face-background (get-text-property 0 'face section)))))
+(defun eshell-p10k--face-at (string pos)
+  "Get face at POS in STRING."
+  (get-text-property pos 'face string))
 
-(defun eshell-p10k--get-prompt-end-terminator (section)
-  "Return an appropraitely-coloured CHAR terminator.
-Needs SECTION for current foreground"
-  (propertize eshell-p10k-end-terminator 'face `(:foreground ,(face-background (get-text-property (- (length section) 2) 'face section)))))
+(defun eshell-p10k--separator (left-section right-section)
+  "Create separator between LEFT-SECTION and RIGHT-SECTION."
+  (let ((left-bg (eshell-p10k--get-bg (eshell-p10k--face-at left-section (- (length left-section) 2))))
+        (right-bg (eshell-p10k--get-bg (eshell-p10k--face-at right-section 0))))
+    (propertize (concat eshell-p10k-separator " ")
+                'face `(:foreground ,left-bg :background ,right-bg))))
 
-(defun eshell-p10k--accumulator (acc x)
-  "Given previous result ACC, append reuslt of calling X."
-  (--if-let (funcall x)
-      (let ((header (eshell-p10k--get-prompt-start-terminator it)))
-        (if (s-blank? acc)
-            (concat header it)
-          (concat acc (eshell-p10k--get-section-separator acc it) it)))
-    acc))
+(defun eshell-p10k--start-terminator (section)
+  "Create start terminator for SECTION."
+  (propertize eshell-p10k-start-terminator
+              'face `(:foreground ,(eshell-p10k--get-bg (eshell-p10k--face-at section 0)))))
 
-(defun eshell-p10k--prepare-segments (segments)
-  "Ensure the SEGMENTS are valid and exist."
-  (let (forms it)
-    (dolist (segment segments)
-      (cond ((stringp segment)
-             (push segment forms))
-            ((symbolp segment)
-             (setq it (cdr (assq (eshell-p10k--internal-segment-name segment) eshell-p10k-segment-alist)))
-             (push it forms))
-            ((error "%s is not a defined eshell segment" segment))))
-    (nreverse forms)))
+(defun eshell-p10k--end-terminator (section)
+  "Create end terminator for SECTION."
+  (propertize eshell-p10k-end-terminator
+              'face `(:foreground ,(eshell-p10k--get-bg (eshell-p10k--face-at section (- (length section) 2))))))
+
+(defun eshell-p10k--render-segments (segments)
+  "Render SEGMENTS list into a prompt string."
+  (let ((result ""))
+    (dolist (segment-name segments)
+      (when-let* ((segment-fn (alist-get (eshell-p10k--segment-name segment-name)
+                                         eshell-p10k-segment-alist))
+                  (rendered (funcall segment-fn)))
+        (setq result
+              (if (string-empty-p result)
+                  (concat (eshell-p10k--start-terminator rendered) rendered)
+                (concat result (eshell-p10k--separator result rendered) rendered)))))
+    result))
 
 (defun eshell-p10k-def-prompt (segments)
-  "Given a list of SEGMENTS, evaluate in order and return."
-  (let* ((segment-forms (eshell-p10k--prepare-segments segments))
-         (prompt (-reduce-from 'eshell-p10k--accumulator "" segment-forms)))
+  "Build a prompt from SEGMENTS list.
+SEGMENTS is a list of segment name symbols."
+  (let ((prompt (eshell-p10k--render-segments segments)))
     (concat eshell-p10k-header-string
             prompt
-            (eshell-p10k--get-prompt-end-terminator prompt)
+            (eshell-p10k--end-terminator prompt)
             "\n"
             eshell-p10k-prompt-string)))
-
-(defun eshell-p10k--last-command-success-p ()
-  "Return t if the last command was successful, else nil."
-  (= (if (not (boundp 'eshell-last-command-status))
-         0
-       eshell-last-command-status) 0))
-
-(defun eshell-p10k--get-linux-icon ()
-  "Attempt to get an icon for the current linux distro."
-  (propertize
-   (if (not (file-exists-p "/etc/os-release"))
-       (all-the-icons-faicon "linux")
-     (let ((distro (string-trim (shell-command-to-string "rg '^ID=' /etc/os-release | cut -d= -f2"))))
-       (pcase distro
-         ("arch" "\uF303")
-         ("debian" "\uF306")
-         ("raspbian" "\uF315")
-         ("ubuntu" "\uF31b")
-         ("elementary" "\uF309")
-         ("fedora" "\uF30a")
-         ("coreos" "\uF305")
-         ("gentoo" "\uF30d")
-         ("mageia" "\uF310")
-         ("centos" "\uF304")
-         ((or "opensuse" "tumbleweed") "\uF314")
-         ("sabayon" "\uF317")
-         ("slackware" "\uF319")
-         ("linuxmint" "\uF30e")
-         ("alpine" "\uF300")
-         ("aosc" "\uF301")
-         ("nixos" "\uF313")
-         ("devuan" "\uF307")
-         ("manjaro" "\uF312")
-         ((or "void" "artix") "\uF17c")
-         (_ (all-the-icons-faicon "linux")))))
-     'face '(:height 1)
-     'display '(raise 0.0)))
-
-(defun eshell-p10k--get-os-icon ()
-  "Return an icon based on the current operating system."
-  (cond
-   ((memq system-type '(cygwin windows-nt ms-dos)) (all-the-icons-faicon "windows"))
-   ((eq system-type 'darwin)                       (propertize (all-the-icons-faicon "apple") 'face '(:height 1) 'display '(raise 0.0)))
-   ((eq system-type 'berkely-unix)                 "\uF30c ")
-   ((eq system-type 'gnu/linux)                    (eshell-p10k--get-linux-icon))))
-
-(defun eshell-p10k-prompt-function ()
-  "Prompt defining function."
-  (eshell-p10k-def-prompt '(distro dir git prompt-num)))
-
-(eshell-p10k-def-segment distro
-  nil
-  (eshell-p10k--get-os-icon)
-  'eshell-p10k-distro-face)
-
-(eshell-p10k-def-segment dir
-  ""
-  (abbreviate-file-name (eshell/pwd))
-  'eshell-p10k-directory-face)
-
-(defun eshell-p10k-git--repo-p ()
-  "Return t if the git executable is on the system and we're in a git repo."
-  (and (executable-find "git")
-       (vc-find-root (eshell/pwd) ".git")))
-
-(defun eshell-p10k-git--command (command &optional directory)
-  "Run a git COMMAND in the current directory, or DIRECTORY."
-  (let ((default-directory (or directory default-directory))
-        (process-environment process-environment))
-    (let ((result (s-trim (with-output-to-string
-                            (apply #'call-process
-                                   (executable-find "git")
-                                   nil
-                                   standard-output
-                                   nil
-                                   (s-split " " command))))))
-      (when (and init-file-debug
-                 (s-starts-with-p "fatal:" result))
-        (message "git error: %s %s" command result))
-      result)))
-
-(defun eshell-p10k-git-current-branch ()
-  "Return the current git branch."
-  (when (eshell-p10k-git--repo-p)
-    (eshell-p10k-git--command "symbolic-ref --short HEAD")))
-
-(defun eshell-p10k-git--clean-p ()
-  "Predicate to check if the current directory is clean."
-  (when (eshell-p10k-git-current-branch)
-    (string= "" (eshell-p10k-git--command "status -s"))))
-
-(defun eshell-p10k--alist-set-or-increment (lst key &optional symbol)
-  "Either set KEY to VAL in LST, or increment if exists."
-  (if-let ((pair (if symbol
-                     (assq key lst)
-                   (assoc key lst))))
-      (setcdr pair (+ 1 (cdr pair)))
-    (push (cons key 1) lst))
-  lst)
-
-(defun eshell-p10k-git--status ()
-  "Return an alist based on the current git status."
-  (when (eshell-p10k-git--repo-p)
-    (let ((status (eshell-p10k-git--command "status --porcelain")))
-        (when (not (string= "" status))
-          (when-let* ((status-lines (s-split "\n" status)))
-            (mapconcat 'identity (mapcar
-                                  (lambda (item) (format "%s%s" (car item) (cdr item)))
-                                  (-reduce-from
-                                   (lambda (acc x)
-                                     (eshell-p10k--alist-set-or-increment acc (substring x 0 2)))
-                                   '()
-                                   status-lines)) " "))))))
-
-(defun eshell-p10k-git-status ()
-  "Return the current git status."
-  (when (eshell-p10k-git--repo-p)
-    (concat
-     (eshell-p10k-git-current-branch)
-     " "
-     (eshell-p10k-git--status))))
-
-(eshell-p10k-def-segment git
-  ""
-  (eshell-p10k-git-status)
-  (if (eshell-p10k-git--clean-p)
-      'eshell-p10k-git-clean-face
-    'eshell-p10k-git-dirty-face))
-
-(defvar eshell-p10k--prompt-num-index 0)
-(add-hook 'eshell-exit-hook (lambda () (setq eshell-p10k--prompt-num-index 0)))
-
-(defun eshell-p10k-prompt-num-increment ()
-  "Increment the current prompt index."
-  (interactive)
-  (setq eshell-p10k--prompt-num-index (cl-incf eshell-p10k--prompt-num-index)))
-
-(advice-add 'eshell-send-input :before 'eshell-p10k-prompt-num-increment)
-(advice-add 'eshell-interrupt-process :before 'eshell-p10k-prompt-num-increment)
-
-(eshell-p10k-def-segment prompt-num
-  ""
-  (number-to-string eshell-p10k--prompt-num-index)
-  'eshell-p10k-prompt-face)
 
 (provide 'eshell-p10k)
 ;;; eshell-p10k.el ends here

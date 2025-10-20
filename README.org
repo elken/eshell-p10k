@@ -3,81 +3,262 @@
 
 [[file:.github/preview.png]]
 
-=eshell-p10k= is, as the name implies, an eshell version of [[https://github.com/romkatv/powerlevel10k][p10k]] (a popular shell theme).
+=eshell-p10k= is a modular, extensible prompt framework for eshell inspired by [[https://github.com/romkatv/powerlevel10k][powerlevel10k]].
+
+* Features
+
+- Highly customizable powerline-style prompts
+- Pre-built segments: OS/distro, directory, git status, prompt counter
+- Simple API for creating custom segments
 
 * Install
+
 ** Dependencies
-  Everything else should already come with emacs
 
-** MELPA
-Coming Soon™
+- Emacs 27.1+
+- [[https://github.com/rainstormstudio/nerd-icons.el][nerd-icons]] for default config
+- A [[https://www.nerdfonts.com/][Nerd Font]] installed and configured in your terminal
 
-** Manual
-Add in the load-path somewhere after the dependencies
+** Manual Installation
 
-* Configure
-
-Some point after =eshell= has loaded (ideally), use the following options to load the prompt
+Add to your load path:
 
 #+begin_src emacs-lisp
-(setq eshell-prompt-function #'eshell-p10k-prompt-function
-        eshell-prompt-regexp eshell-p10k-prompt-string)
+(add-to-list 'load-path "/path/to/eshell-p10k")
 #+end_src
 
-** Characters
-Much like p10k itself, it's possible to change all the start/end/separator characters.
+The default prompt will be autoloaded when you use it.
 
-| Variable                     | Default  |
-|------------------------------+----------|
-| =eshell-p10k-separator=        | "\xe0bc" |
-| =eshell-p10k-start-terminator= | "\xe0b2" |
-| =eshell-p10k-end-terminator=   | "\xe0b0" |
+* Quick Start
 
-Any characters /should/ work but haven't been tested
+** Basic Usage
 
-** Segments
-This package includes a somewhat sane prompt out of the box, but also includes a
-number of tools to create our own segments.
-
-Let's take a go at our own segment(using an existing face for simplicity)
+Use the default prompt configuration (automatically loads on first use):
 
 #+begin_src emacs-lisp
-(eshell-p10k-def-segment time
-  ""
-  (format-time-string "%H:%M" (current-time))
-  'eshell-distro-face)
+(setq eshell-prompt-function #'eshell-p10k-default-prompt
+      eshell-prompt-regexp eshell-p10k-prompt-regex)
 #+end_src
 
-The =eshell-p10k-def-segment= macro takes the following basic form:
+That's it! The default configuration will be loaded automatically when eshell starts.
+
+The default prompt includes:
+- OS/distribution icon
+- Current directory
+- Git branch and status (when in a repo)
+- Prompt counter
+
+* Customization
+
+** Powerline Characters
+
+Customize the powerline separators and terminators:
+
+#+begin_src emacs-lisp
+(setq eshell-p10k-separator "\xe0bc"        ; Separator between segments
+      eshell-p10k-start-terminator "\xe0b2" ; Start of each segment
+      eshell-p10k-end-terminator "\xe0b0")  ; End of prompt
+#+end_src
+
+** Prompt Structure
+
+Customize the prompt frame:
+
+#+begin_src emacs-lisp
+(setq eshell-p10k-header-string "\n┌─"  ; Prefix before segments
+      eshell-p10k-prompt-string "└─> ") ; Input prompt
+#+end_src
+
+* Creating Custom Segments
+
+** Basic Segment
+
+The =eshell-p10k-def-segment= macro creates a new segment:
 
 #+begin_src emacs-lisp
 (eshell-p10k-def-segment segment-name
-  icon-to-use
-  body
-  face)
+  icon        ; Icon to display (or nil)
+  form        ; Expression to evaluate
+  face)       ; Face to apply
 #+end_src
 
-+ =segment-name= is the defined name of the segment, which will be later used when
-  we define the prompt function
-+ =icon-to-use= is the icon which will get prepended to the start of the form. Can
-  also be an expression.
-+ =body= is the ... body of the segment, which gets evaluated to produce the
-  output. A result of =nil= will cause the segment to not be displayed.
-+ =face= is the face used to display the segment. Can also be an expression.
-
-Now the segment has been created, the prompt definer (=eshell-p10k-prompt-function=) has to be modified
+** Example: Time Segment
 
 #+begin_src emacs-lisp
-(defun eshell-p10k-prompt-function ()
-  "Prompt defining function."
-  (eshell-p10k-def-prompt '(distro dir git prompt-num time)))
+(defface my-time-face
+  '((t (:background "purple" :foreground "white")))
+  "Face for time segment.")
+
+(eshell-p10k-def-segment time
+  ""
+  (format-time-string "%H:%M:%S")
+  'my-time-face)
 #+end_src
 
-And after everything has been re-evaluated, we have the below prompt!
+** Example: Hostname Segment
 
-[[file:.github/time.png]]
+#+begin_src emacs-lisp
+(defface my-hostname-face
+  '((t (:background "orange" :foreground "black")))
+  "Face for hostname segment.")
+
+(eshell-p10k-def-segment hostname
+  ""
+  (system-name)
+  'my-hostname-face)
+#+end_src
+
+** Example: Conditional Segment
+
+Segments that return =nil= won't be displayed:
+
+#+begin_src emacs-lisp
+(eshell-p10k-def-segment battery
+  ""
+  (when (and (featurep 'battery)
+             battery-status-function)
+    (battery-format "%p%%" (funcall battery-status-function)))
+  'my-battery-face)
+#+end_src
+
+* Creating Custom Prompts
+
+** Simple Custom Prompt
+
+Compose your own prompt from segments:
+
+#+begin_src emacs-lisp
+(defun my-custom-prompt ()
+  "My custom prompt with time and hostname."
+  (eshell-p10k-def-prompt '(hostname dir git time)))
+
+(setq eshell-prompt-function #'my-custom-prompt)
+#+end_src
+
+** Minimal Prompt
+
+Use only the segments you need:
+
+#+begin_src emacs-lisp
+(defun my-minimal-prompt ()
+  "Minimal prompt with directory and git."
+  (eshell-p10k-def-prompt '(dir git)))
+
+(setq eshell-prompt-function #'my-minimal-prompt)
+#+end_src
+
+** Framework-Only Usage
+
+Use only the core framework without default segments (manual require needed):
+
+#+begin_src emacs-lisp
+(require 'eshell-p10k)  ; Core framework only
+
+;; Define your own segments
+(eshell-p10k-def-segment my-segment ...)
+
+;; Create your prompt
+(defun my-prompt ()
+  (eshell-p10k-def-prompt '(my-segment)))
+
+(setq eshell-prompt-function #'my-prompt)
+#+end_src
+
+* Default Segments
+
+** =distro=
+
+Displays an icon for your OS/distribution:
+- Automatically detects Linux distros from =/etc/os-release=
+- Supports: Arch, Debian, Ubuntu, Fedora, NixOS, and more
+- Falls back to generic icons for unknown systems
+
+** =dir=
+
+Shows current directory:
+- Uses =abbreviate-file-name= to shorten paths
+- Replaces home directory with =~=
+
+** =git=
+
+Git repository information:
+- Shows current branch name
+- Displays file status counts (e.g., "M 2", "A 1")
+- Background color indicates clean (green) or dirty (red) state
+- Only appears when in a git repository
+
+** =prompt-num=
+
+Command counter:
+- Increments with each command
+- Resets when eshell exits
+- Useful for command history navigation
+
+* Advanced Examples
+
+** Multi-line with User Info
+
+#+begin_src emacs-lisp
+(eshell-p10k-def-segment user
+  ""
+  (user-login-name)
+  'eshell-p10k-distro-face)
+
+(defun my-detailed-prompt ()
+  "Multi-line prompt with user info."
+  (eshell-p10k-def-prompt '(user hostname dir git prompt-num)))
+
+(setq eshell-prompt-function #'my-detailed-prompt)
+#+end_src
+
+** Conditional Git Detail
+
+#+begin_src emacs-lisp
+(defcustom my-git-detail-threshold 50
+  "Show detailed git status only if repo has fewer than this many files."
+  :type 'integer)
+
+(eshell-p10k-def-segment git-smart
+  ""
+  (when (eshell-p10k--git-repo-p)
+    (let ((branch (eshell-p10k--git-branch)))
+      (if (< (length (eshell-p10k--git-status-counts)) my-git-detail-threshold)
+          (eshell-p10k--git-status)
+        branch)))
+  (if (eshell-p10k--git-clean-p)
+      'eshell-p10k-git-clean-face
+    'eshell-p10k-git-dirty-face))
+#+end_src
+
+* Troubleshooting
+
+** Icons Not Displaying
+
+1. Ensure you have a Nerd Font installed
+2. Run =M-x nerd-icons-install-fonts=
+3. Configure your terminal to use the Nerd Font
+
+** Prompt Not Updating
+
+Make sure you've set both variables:
+
+#+begin_src emacs-lisp
+(setq eshell-prompt-function #'eshell-p10k-default-prompt
+      eshell-prompt-regexp eshell-p10k-prompt-regex)
+#+end_src
+
+** Git Segment Performance
+
+For large repositories, git operations may slow down prompt rendering. Consider:
+- Disabling the git segment: =(eshell-p10k-def-prompt '(distro dir prompt-num))=
+- Using a simpler git segment without status counts
+
+* Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests on [[https://github.com/elken/eshell-p10k][GitHub]].
 
 * Credit
-+ [[https://www.modernemacs.com/post/custom-eshell/][This]] article gave me the fundamentals to create the skeleton for this
-+ [[https://github.com/seagle0128/doom-modeline][doom-modeline]] for the concept of split segments and adding checks around said segments
-+ [[https://github.com/romkatv/powerlevel10k][p10k]] for the inspiration and (and the icons)
+
+- [[https://www.modernemacs.com/post/custom-eshell/][Modern Emacs]] - Fundamentals for eshell customization
+- [[https://github.com/seagle0128/doom-modeline][doom-modeline]] - Inspiration for modular segment design
+- [[https://github.com/romkatv/powerlevel10k][powerlevel10k]] - The original inspiration and powerline aesthetic
