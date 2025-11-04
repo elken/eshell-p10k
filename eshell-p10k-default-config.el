@@ -167,11 +167,11 @@
 (defvar eshell-p10k--prompt-num 0
   "Current prompt number.")
 
-(defun eshell-p10k--increment-prompt-num ()
+(defun eshell-p10k--increment-prompt-num (&rest _)
   "Increment the prompt counter."
   (cl-incf eshell-p10k--prompt-num))
 
-(defun eshell-p10k--reset-prompt-num ()
+(defun eshell-p10k--reset-prompt-num (&rest _)
   "Reset the prompt counter."
   (setq eshell-p10k--prompt-num 0))
 
